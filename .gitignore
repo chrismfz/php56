@@ -262,3 +262,13 @@ win32/wsyslog.h
 win32/win32.dsp
 win32/php.dsw
 .idea
+
+# Un-ignore pre-generated build files so the source tree builds without
+# bison/re2c/autoconf — same as php.net release tarballs. This lets
+# build-legacy-php.sh skip the fragile private-toolchain step entirely.
+!configure
+!Zend/zend_language_parser.c
+!Zend/zend_language_parser.h
+!Zend/zend_ini_parser.c
+!Zend/zend_ini_parser.h
+!main/php_config.h.in
