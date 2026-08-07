@@ -164,7 +164,7 @@ install_deps() {
       freetype-devel bzip2-devel readline-devel libxslt-devel gmp-devel \
       sqlite-devel zlib-devel gettext-devel libxcrypt-devel \
       libpq-devel openldap-devel cyrus-sasl-devel libtidy-devel aspell-devel \
-      net-snmp-devel net-snmp-utils
+
   elif command -v apt-get >/dev/null 2>&1; then
     log "installing Debian build dependencies"
     export DEBIAN_FRONTEND=noninteractive
@@ -175,7 +175,7 @@ install_deps() {
       libjpeg-dev libpng-dev libfreetype6-dev libbz2-dev libreadline-dev \
       libxslt1-dev libgmp-dev libsqlite3-dev zlib1g-dev libgettextpo-dev \
       libcrypt-dev libpq-dev libldap2-dev libsasl2-dev libtidy-dev \
-      libaspell-dev libsnmp-dev
+      libaspell-dev
   else
     die "unsupported package manager; expected dnf or apt-get."
   fi
@@ -440,7 +440,6 @@ build_php() {
       --with-ldap-sasl=/usr \
       --with-tidy=/usr \
       --with-pspell=/usr \
-      --with-snmp \
       --with-sqlite3=/usr \
       --with-pdo-sqlite=/usr \
       --with-readline \
@@ -527,7 +526,7 @@ verify() {
   esac
 
   modules="$("$php_bin" -n -m 2>/dev/null)"
-  for module in openssl curl gd mbstring mcrypt mysql mysqli PDO pdo_mysql pgsql pdo_pgsql ldap tidy pspell snmp sqlite3 pdo_sqlite zip; do
+  for module in openssl curl gd mbstring mcrypt mysql mysqli PDO pdo_mysql pgsql pdo_pgsql ldap tidy pspell sqlite3 pdo_sqlite zip; do
     grep -Fxq "$module" <<<"$modules" || die "expected PHP module missing: ${module}"
   done
 
