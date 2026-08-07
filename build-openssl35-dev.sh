@@ -76,24 +76,40 @@ find_openssl_libdir() {
   return 1
 }
 
-build_openssl() {
-  local libdir=""
-  libdir="$(find_openssl_libdir || true)"
-  if [ -n "$libdir" ] && [ "$FORCE_DEPS" != "1" ]; then
-    if "${OPENSSL_PREFIX}/bin/openssl" version 2>/dev/null | grep -Fq "OpenSSL ${OPENSSL_VERSION}"; then
-      log "OpenSSL ${OPENSSL_VERSION} already at ${OPENSSL_PREFIX}"
-      return
+find_ca_bundle() {
+  local file
+  for file in \
+    /etc/pki/tls/certs/ca-bundle.crt \
+    /etc/ssl/certs/ca-certificates.crt \
+    /etc/ssl/ca-bundle.pem; do
+    if [ -s "$file" ]; then
+      printf '%s\n' "$file"
+      return 0
     fi
-  fi
+  done
+  return 1
+}
 
-  local tarball="${BUILD_ROOT}/openssl-${OPENSSL_VERSION}.tar.gz"
+build_openssl() {
+  local libdir="" tarball="${BUILD_ROOT}/openssl-${OPENSSL_VERSION}.tar.gz"
   mkdir -p "$BUILD_ROOT"
+
+  # Keep the source tarball available even when OpenSSL itself is already built;
+  # the standalone install uses it to provision the matching openssl.cnf.
   if [ ! -s "$tarball" ]; then
     log "downloading OpenSSL ${OPENSSL_VERSION}"
     curl -fL --retry 3 --retry-delay 2 \
       -o "${tarball}.part" \
       "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz"
     mv -f "${tarball}.part" "$tarball"
+  fi
+
+  libdir="$(find_openssl_libdir || true)"
+  if [ -n "$libdir" ] && [ "$FORCE_DEPS" != "1" ]; then
+    if "${OPENSSL_PREFIX}/bin/openssl" version 2>/dev/null | grep -Fq "OpenSSL ${OPENSSL_VERSION}"; then
+      log "OpenSSL ${OPENSSL_VERSION} already at ${OPENSSL_PREFIX}"
+      return
+    fi
   fi
 
   rm -rf "${BUILD_ROOT}/openssl-${OPENSSL_VERSION}"
@@ -110,6 +126,29 @@ build_openssl() {
   popd >/dev/null
 
   find_openssl_libdir >/dev/null || die "libssl.so.3 was not installed under ${OPENSSL_PREFIX}."
+}
+
+provision_openssl_runtime_files() {
+  local tarball="${BUILD_ROOT}/openssl-${OPENSSL_VERSION}.tar.gz" ca_bundle
+
+  install -d -m 755 "${OPENSSL_PREFIX}/certs"
+  install -d -m 700 "${OPENSSL_PREFIX}/private"
+
+  if [ ! -s "${OPENSSL_PREFIX}/openssl.cnf" ]; then
+    [ -s "$tarball" ] || die "OpenSSL source tarball missing; cannot provision openssl.cnf."
+    log "installing OpenSSL ${OPENSSL_VERSION} configuration"
+    tar -xOf "$tarball" "openssl-${OPENSSL_VERSION}/apps/openssl.cnf" > "${OPENSSL_PREFIX}/openssl.cnf"
+    chmod 644 "${OPENSSL_PREFIX}/openssl.cnf"
+  fi
+
+  ca_bundle="$(find_ca_bundle)" || die "could not locate the system CA bundle."
+  ln -sfn "$ca_bundle" "${OPENSSL_PREFIX}/cert.pem"
+
+  [ -r "${OPENSSL_PREFIX}/openssl.cnf" ] || die "OpenSSL configuration is not readable."
+  [ -r "${OPENSSL_PREFIX}/cert.pem" ] || die "OpenSSL CA bundle link is not readable."
+
+  log "OpenSSL config: ${OPENSSL_PREFIX}/openssl.cnf"
+  log "OpenSSL CA bundle: ${OPENSSL_PREFIX}/cert.pem -> ${ca_bundle}"
 }
 
 prepare_php_source() {
@@ -132,7 +171,7 @@ prepare_php_source() {
     "${SRC_DIR}/Zend/zend_ini_parser.h" \
     "${SRC_DIR}/Zend/zend_ini_scanner.c" 2>/dev/null || true
 
-  # OpenSSL 3 removed RSA_SSLV23_PADDING.  For the development probe, keep the
+  # OpenSSL 3 removed RSA_SSLV23_PADDING. For the development probe, keep the
   # PHP 5.6 source otherwise untouched and simply omit registration of the
   # unsupported userland constant when the OpenSSL headers do not provide it.
   python3 - "$SRC_DIR/ext/openssl/openssl.c" <<'PY'
@@ -283,6 +322,7 @@ main() {
   install_deps
   mkdir -p "$BUILD_ROOT" "$NGM_ROOT"
   build_openssl
+  provision_openssl_runtime_files
   prepare_php_source
   build_php
   verify
