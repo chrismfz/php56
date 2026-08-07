@@ -16,42 +16,13 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-
       - name: Remove build-time PHP source rewrite
         shell: bash
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('build-openssl35-dev.sh')
-          text = path.read_text(encoding='utf-8')
-
-          old_intro = '''# It builds a clean copy of the current repository HEAD and does not modify the
-# checked-out PHP sources. The first goal is compile/runtime discovery against
-# OpenSSL 3.5; once stable, compatibility changes can be materialized in source.'''
-          new_intro = '''# It builds a clean copy of the current repository HEAD. OpenSSL compatibility
-# changes live in the tracked PHP source; this script handles only the isolated
-# build, dependency, packaging and runtime verification environment.'''
-          if old_intro not in text:
-              raise SystemExit('development-builder intro not found')
-          text = text.replace(old_intro, new_intro, 1)
-
-          start = text.index('  # OpenSSL 3 removed RSA_SSLV23_PADDING.')
-          end_marker = "PY\n}"
-          end = text.index(end_marker, start)
-          text = text[:start] + text[end + len('PY\n'):]
-
-          path.write_text(text, encoding='utf-8')
-          PY
-
+          python3 -c "from pathlib import Path; p=Path('build-openssl35-dev.sh'); t=p.read_text(); a=t.index('  # OpenSSL 3 removed RSA_SSLV23_PADDING.'); b=t.index('PY\\n}', a); p.write_text(t[:a] + t[b+3:])"
+          grep -Fq 'SRC_DIR/ext/openssl/openssl.c' build-openssl35-dev.sh && exit 1 || true
           git diff --check
           test "$(git diff --name-only)" = "build-openssl35-dev.sh"
-          if grep -Fq 'SRC_DIR/ext/openssl/openssl.c' build-openssl35-dev.sh; then
-            echo 'source rewrite still present' >&2
-            exit 1
-          fi
-          git diff -- build-openssl35-dev.sh
-
       - name: Commit builder cleanup
         shell: bash
         run: |
