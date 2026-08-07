@@ -66,8 +66,9 @@ export LD_LIBRARY_PATH="${openssl_libdir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
 log "OpenSSL provider modules"
 printf '    config:  %s\n' "$OPENSSL_CONF"
 printf '    modules: %s\n' "$OPENSSL_MODULES"
-"$OPENSSL_BIN" list -providers | grep -E '^[[:space:]]*(default|legacy)$' >/dev/null || \
-  die "default + legacy providers were not both loaded"
+providers="$($OPENSSL_BIN list -providers)"
+printf '%s\n' "$providers" | grep -Eq '^[[:space:]]+default$' || die "default provider did not load"
+printf '%s\n' "$providers" | grep -Eq '^[[:space:]]+legacy$' || die "legacy provider did not load"
 
 log "MD4 digest via legacy provider"
 "$PHP_BIN" -n -r '
@@ -151,6 +152,8 @@ if ($ok !== true || $opened !== $plain) exit(3);
 '
 
 log "legacy PKCS#12 generation + PHP read"
+LEGACY_KEY_FILE="${tmpdir}/key.pem" \
+LEGACY_CERT_FILE="${tmpdir}/cert.pem" \
 "$PHP_BIN" -n -r '
 $dn = array("commonName"=>"php56-openssl35-legacy.local");
 $k = openssl_pkey_new(array("private_key_bits"=>2048,"private_key_type"=>OPENSSL_KEYTYPE_RSA));
@@ -161,7 +164,7 @@ $crt = openssl_csr_sign($csr, null, $k, 1, array("digest_alg"=>"sha256"));
 if ($crt === false) exit(3);
 if (!openssl_pkey_export_to_file($k, getenv("LEGACY_KEY_FILE"))) exit(4);
 if (!openssl_x509_export_to_file($crt, getenv("LEGACY_CERT_FILE"))) exit(5);
-' LEGACY_KEY_FILE="${tmpdir}/key.pem" LEGACY_CERT_FILE="${tmpdir}/cert.pem"
+'
 
 # The -legacy switch intentionally creates a PKCS#12 using legacy-compatible
 # algorithms (including RC2 for certificate encryption in OpenSSL 3.x).
