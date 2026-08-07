@@ -171,24 +171,6 @@ prepare_php_source() {
     "${SRC_DIR}/Zend/zend_ini_parser.h" \
     "${SRC_DIR}/Zend/zend_ini_scanner.c" 2>/dev/null || true
 
-  # OpenSSL 3 removed RSA_SSLV23_PADDING. For the development probe, keep the
-  # PHP 5.6 source otherwise untouched and simply omit registration of the
-  # unsupported userland constant when the OpenSSL headers do not provide it.
-  python3 - "$SRC_DIR/ext/openssl/openssl.c" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
-old = '\tREGISTER_LONG_CONSTANT("OPENSSL_SSLV23_PADDING", RSA_SSLV23_PADDING, CONST_CS|CONST_PERSISTENT);'
-new = '#ifdef RSA_SSLV23_PADDING\n' + old + '\n#endif'
-if new not in text:
-    count = text.count(old)
-    if count != 1:
-        raise SystemExit("expected one OPENSSL_SSLV23_PADDING registration, found %d" % count)
-    text = text.replace(old, new, 1)
-    path.write_text(text, encoding="utf-8")
-PY
 }
 
 build_php() {
