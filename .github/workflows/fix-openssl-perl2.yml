@@ -1,0 +1,24 @@
+name: OpenSSL Perl fix
+on: [push]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Retry OpenSSL Perl fix'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Clone repository
+        run: git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
+      - name: Patch builder
+        run: |
+          cd repo
+          python3 -c 'from pathlib import Path; p=Path("build-php56.sh"); s=p.read_text(); old="""  pushd \"${BUILD_ROOT}/openssl-${OPENSSL_VERSION}\" >/dev/null\n    log \"building OpenSSL ${OPENSSL_VERSION} -> ${OPENSSL_PREFIX}\"\n    ./config \\\n      --prefix=\"${OPENSSL_PREFIX}\" \\\n      --openssldir=\"${OPENSSL_PREFIX}\" \\\n      shared zlib -fPIC\n    make -j\"$JOBS\"\n    make install_sw\n  popd >/dev/null\n"""; new="""  pushd \"${BUILD_ROOT}/openssl-${OPENSSL_VERSION}\" >/dev/null\n    local openssl_perl5lib\n    openssl_perl5lib=\"${PWD}/util/perl:${PWD}/external/perl/Text-Template-1.56/lib\"\n    [ -r \"${PWD}/util/perl/OpenSSL/fallback.pm\" ] || die \"OpenSSL bundled Perl fallback module is missing.\"\n    [ -r \"${PWD}/external/perl/Text-Template-1.56/lib/Text/Template.pm\" ] || die \"OpenSSL bundled Text::Template module is missing.\"\n\n    log \"building OpenSSL ${OPENSSL_VERSION} -> ${OPENSSL_PREFIX}\"\n    env -u PERL5OPT PERL5LIB=\"$openssl_perl5lib\" ./config \\\n      --prefix=\"${OPENSSL_PREFIX}\" \\\n      --openssldir=\"${OPENSSL_PREFIX}\" \\\n      shared zlib -fPIC\n    env -u PERL5OPT PERL5LIB=\"$openssl_perl5lib\" make -j\"$JOBS\"\n    env -u PERL5OPT PERL5LIB=\"$openssl_perl5lib\" make install_sw\n  popd >/dev/null\n"""; assert old in s, "target block not found"; p.write_text(s.replace(old,new,1))'
+          bash -n build-php56.sh
+          git diff --check
+          git config user.name Chris
+          git config user.email chrismfz@gmail.com
+          git add build-php56.sh
+          git commit -m 'Isolate OpenSSL Perl build environment'
+          git push origin main
