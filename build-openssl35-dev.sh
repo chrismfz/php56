@@ -124,8 +124,6 @@ prepare_php_source() {
   [ -x "${SRC_DIR}/configure" ] || chmod +x "${SRC_DIR}/configure" 2>/dev/null || true
   [ -x "${SRC_DIR}/configure" ] || die "pre-generated configure is missing from repository HEAD."
 
-  # Avoid regenerating committed parser/scanner outputs just because git archive
-  # gives all exported files fresh mtimes.
   touch \
     "${SRC_DIR}/Zend/zend_language_parser.c" \
     "${SRC_DIR}/Zend/zend_language_parser.h" \
@@ -136,7 +134,7 @@ prepare_php_source() {
 }
 
 build_php() {
-  local openssl_libdir
+  local openssl_libdir openssl_pc_prefix
   openssl_libdir="$(find_openssl_libdir)" || die "private OpenSSL library directory not found."
 
   if [ -x "${PREFIX}/bin/php" ] && [ "$FORCE" != "1" ]; then
@@ -149,8 +147,17 @@ build_php() {
   export PKG_CONFIG_PATH="${openssl_libdir}/pkgconfig:${PKG_CONFIG_PATH:-}"
   export LD_LIBRARY_PATH="${openssl_libdir}:${LD_LIBRARY_PATH:-}"
 
+  pkg-config --exists openssl || die "private OpenSSL pkg-config metadata was not found in ${openssl_libdir}/pkgconfig."
+  openssl_pc_prefix="$(pkg-config --variable=prefix openssl)"
+  [ "$openssl_pc_prefix" = "$OPENSSL_PREFIX" ] || \
+    die "pkg-config resolved OpenSSL from ${openssl_pc_prefix}, expected ${OPENSSL_PREFIX}."
+  log "pkg-config OpenSSL: $(pkg-config --modversion openssl) from ${openssl_pc_prefix}"
+
   pushd "$SRC_DIR" >/dev/null
     log "configuring minimal PHP 5.6.40 OpenSSL 3.5 probe -> ${PREFIX}"
+    # Passing --with-openssl without an explicit directory deliberately selects
+    # PHP 5.6's pkg-config path. Its legacy explicit-prefix detector only checks
+    # $prefix/$PHP_LIBDIR and therefore misses OpenSSL installed into lib64.
     ./configure \
       --prefix="${PREFIX}" \
       --exec-prefix="${PREFIX}" \
@@ -161,7 +168,7 @@ build_php() {
       --enable-fpm \
       --with-fpm-user="${FPM_USER}" \
       --with-fpm-group="${FPM_GROUP}" \
-      --with-openssl="${OPENSSL_PREFIX}" \
+      --with-openssl \
       --with-zlib \
       --enable-hash \
       --enable-json \
