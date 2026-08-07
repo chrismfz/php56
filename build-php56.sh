@@ -200,13 +200,18 @@ build_openssl() {
   tar -xzf "$tarball" -C "$BUILD_ROOT"
 
   pushd "${BUILD_ROOT}/openssl-${OPENSSL_VERSION}" >/dev/null
+    local openssl_perl5lib
+    openssl_perl5lib="${PWD}/util/perl:${PWD}/external/perl/Text-Template-1.56/lib"
+    [ -r "${PWD}/util/perl/OpenSSL/fallback.pm" ] || die "OpenSSL bundled Perl fallback module is missing."
+    [ -r "${PWD}/external/perl/Text-Template-1.56/lib/Text/Template.pm" ] || die "OpenSSL bundled Text::Template module is missing."
+
     log "building OpenSSL ${OPENSSL_VERSION} -> ${OPENSSL_PREFIX}"
-    ./config \
+    env -u PERL5OPT PERL5LIB="$openssl_perl5lib" ./config \
       --prefix="${OPENSSL_PREFIX}" \
       --openssldir="${OPENSSL_PREFIX}" \
       shared zlib -fPIC
-    make -j"$JOBS"
-    make install_sw
+    env -u PERL5OPT PERL5LIB="$openssl_perl5lib" make -j"$JOBS"
+    env -u PERL5OPT PERL5LIB="$openssl_perl5lib" make install_sw
   popd >/dev/null
 
   find_libdir "$OPENSSL_PREFIX" 'libssl.so.3' >/dev/null || \
