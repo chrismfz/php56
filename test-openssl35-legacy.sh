@@ -43,14 +43,15 @@ modules_dir="$(find_modules_dir)" || die "OpenSSL legacy provider module not fou
 tmpdir="$(mktemp -d /tmp/php56-openssl35-legacy.XXXXXX)"
 trap 'rm -rf "$tmpdir"' EXIT
 
-# Preserve the complete OpenSSL configuration (notably the req/CSR sections)
-# and override only provider initialization for this test process.
-cat > "${tmpdir}/openssl-legacy.cnf" <<EOF
-.include ${OPENSSL_PREFIX}/openssl.cnf
+# Preserve the complete OpenSSL configuration, including req/CSR sections.
+# Re-open the existing [openssl_init] section at the end and override only its
+# provider mapping. This avoids .include section-state problems and keeps the
+# base openssl_conf = openssl_init directive intact.
+cp "${OPENSSL_PREFIX}/openssl.cnf" "${tmpdir}/openssl-legacy.cnf"
+cat >> "${tmpdir}/openssl-legacy.cnf" <<'EOF'
 
-openssl_conf = openssl_init_php56_legacy
-
-[openssl_init_php56_legacy]
+# PHP 5.6 OpenSSL 3.5 legacy-provider regression overlay
+[openssl_init]
 providers = provider_sect_php56_legacy
 
 [provider_sect_php56_legacy]
@@ -72,8 +73,14 @@ log "OpenSSL provider modules"
 printf '    config:  %s\n' "$OPENSSL_CONF"
 printf '    modules: %s\n' "$OPENSSL_MODULES"
 providers="$($OPENSSL_BIN list -providers)"
-printf '%s\n' "$providers" | grep -Eq '^[[:space:]]+default$' || die "default provider did not load"
-printf '%s\n' "$providers" | grep -Eq '^[[:space:]]+legacy$' || die "legacy provider did not load"
+printf '%s\n' "$providers" | grep -Eq '^[[:space:]]+default$' || {
+  printf '%s\n' "$providers" >&2
+  die "default provider did not load"
+}
+printf '%s\n' "$providers" | grep -Eq '^[[:space:]]+legacy$' || {
+  printf '%s\n' "$providers" >&2
+  die "legacy provider did not load"
+}
 
 log "MD4 digest via legacy provider"
 "$PHP_BIN" -n -r '
