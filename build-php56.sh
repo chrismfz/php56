@@ -21,6 +21,7 @@
 #
 # FORCE_DEPS=1 also rebuilds the shared private OpenSSL/curl/libmcrypt prefixes.
 # RUN_REGRESSION_TESTS=0 skips the post-build regression suite.
+# RUNTIME_ONLY=1 only provisions runtime config and runs verification/tests.
 # ENABLE_LEGACY_PROVIDER=0 disables the private OpenSSL legacy provider.
 
 set -Eeuo pipefail
@@ -49,6 +50,7 @@ FORCE="${FORCE:-0}"
 FORCE_DEPS="${FORCE_DEPS:-0}"
 RUN_REGRESSION_TESTS="${RUN_REGRESSION_TESTS:-1}"
 ENABLE_LEGACY_PROVIDER="${ENABLE_LEGACY_PROVIDER:-1}"
+RUNTIME_ONLY="${RUNTIME_ONLY:-0}"
 
 FPM_USER="${FPM_USER:-nobody}"
 if getent group nogroup >/dev/null 2>&1; then
@@ -520,6 +522,18 @@ run_regression_tests() {
 main() {
   need_root
   mkdir -p "$BUILD_ROOT" "$NGM_ROOT"
+
+  if [ "$RUNTIME_ONLY" = "1" ]; then
+    log "runtime-only provisioning / verification for PHP ${PHP_RELEASE} at ${PREFIX}"
+    [ -x "${PREFIX}/bin/php" ] || die "existing PHP CLI binary missing: ${PREFIX}/bin/php"
+    [ -x "${PREFIX}/sbin/php-fpm" ] || die "existing PHP FPM binary missing: ${PREFIX}/sbin/php-fpm"
+    find_libdir "$OPENSSL_PREFIX" 'libssl.so.3' >/dev/null || die "private OpenSSL 3 runtime missing under ${OPENSSL_PREFIX}."
+    provision_openssl_runtime_files
+    verify
+    run_regression_tests
+    return
+  fi
+
   install_deps
   build_openssl
   provision_openssl_runtime_files
