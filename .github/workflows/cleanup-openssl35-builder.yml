@@ -1,0 +1,62 @@
+name: Cleanup OpenSSL 3.5 development builder
+
+on:
+  push:
+    paths:
+      - .github/workflows/cleanup-openssl35-builder.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Remove build-time PHP source rewrite
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('build-openssl35-dev.sh')
+          text = path.read_text(encoding='utf-8')
+
+          old_intro = '''# It builds a clean copy of the current repository HEAD and does not modify the
+# checked-out PHP sources. The first goal is compile/runtime discovery against
+# OpenSSL 3.5; once stable, compatibility changes can be materialized in source.'''
+          new_intro = '''# It builds a clean copy of the current repository HEAD. OpenSSL compatibility
+# changes live in the tracked PHP source; this script handles only the isolated
+# build, dependency, packaging and runtime verification environment.'''
+          if old_intro not in text:
+              raise SystemExit('development-builder intro not found')
+          text = text.replace(old_intro, new_intro, 1)
+
+          start = text.index('  # OpenSSL 3 removed RSA_SSLV23_PADDING.')
+          end_marker = "PY\n}"
+          end = text.index(end_marker, start)
+          text = text[:start] + text[end + len('PY\n'):]
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+          test "$(git diff --name-only)" = "build-openssl35-dev.sh"
+          if grep -Fq 'SRC_DIR/ext/openssl/openssl.c' build-openssl35-dev.sh; then
+            echo 'source rewrite still present' >&2
+            exit 1
+          fi
+          git diff -- build-openssl35-dev.sh
+
+      - name: Commit builder cleanup
+        shell: bash
+        run: |
+          git config user.name "ngm-php-maintenance"
+          git config user.email "ngm-php-maintenance@users.noreply.github.com"
+          git add build-openssl35-dev.sh
+          git commit -m "Build OpenSSL 3.5 probe from tracked PHP source"
+          git push origin HEAD:main
