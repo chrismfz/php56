@@ -44,3 +44,28 @@ php-5.6.40-bug78222.patch
 php-5.6.40-bug78256.patch
 php-5.6.40-bug79082.patch
 php-5.6.40-bug79282.patch
+
+# ── Careful-pile: verified already-fixed CVEs in our boogermann base ──
+# CVE-2020-7070  main/php_variables.c: `if (arg != PARSE_COOKIE)` guards present (x2).
+php-5.6.40-bug79699-CVE-2020-7070.patch
+# CVE-2021-21705 ext/filter/logical_filters.c: is_userinfo_valid() present and wired
+#   into php_filter_validate_url (our variant caches strlen).
+php-7.0-CVE-2021-21705.patch
+# CVE-2019-11035 ext/exif/exif.c: exif_iif_add_value already carries the size_t
+#   value_len parameter and the length>value_len bounds-check rework.
+php56-CVE-2019-11035.patch
+# CVE-2021-21704 ext/pdo_firebird: the *len==ULONG_MAX guard is present, written as
+#   (LONG_MAX * 2UL + 1UL).
+php56-CVE-2021-21704.patch
+
+# ── Careful-pile: non-CVE robustness bugs, DEFERRED (documented) ──
+# Not security CVEs; they conflict with our boogermann base and are low risk on a
+# legacy runtime. Revisit via a future refresh if wanted.
+# bug78333 ext/exif/exif.c: adds php_ifd_get_float/double IFD readers.
+php-5.6.40-bug78333.patch
+# bug77630 main/streams/plain_wrapper.c: EPERM handling on rename/link.
+php-5.6.40-bug77630.patch
+# bug74670 ext/standard/var_unserializer: GMP unserialize underflow — touches the
+#   re2c-GENERATED var_unserializer.c, which this 5.6 build ships pre-generated and
+#   cannot regenerate (no re2c toolchain), so it can't be cleanly applied here.
+php-5.6.38-bug74670.patch
