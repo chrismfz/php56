@@ -1,0 +1,11 @@
+# patches-local/exclude — CloudLinux series entries we deliberately DO NOT apply.
+# One series filename per line (# comments allowed). Hand-maintained; the importer
+# never touches it. The build skips these when applying patches/series.
+
+# CVE-2019-11048 (main/rfc1867.c multipart body overflow) — rebased onto our
+# boogermann base as patches-local/CVE-2019-11048-rfc1867-size_t.patch, because
+# our tree carries 'unsigned int' (not the pristine 'int' these patches expect),
+# so the CloudLinux hunks don't apply. bug78875 only splits array_len (already a
+# separate, bounded 'unsigned int' here — safe), so it is not re-created.
+php-5.6.40-bug78875-CVE-2019-11048.patch
+php-5.6.40-bug78876-CVE-2019-11048.patch
