@@ -54,6 +54,7 @@ RUN_REGRESSION_TESTS="${RUN_REGRESSION_TESTS:-1}"
 ENABLE_LEGACY_PROVIDER="${ENABLE_LEGACY_PROVIDER:-1}"
 ENABLE_IONCUBE="${ENABLE_IONCUBE:-1}"
 RUNTIME_ONLY="${RUNTIME_ONLY:-0}"
+APPLY_PATCHES="${APPLY_PATCHES:-1}"   # apply patches/series (CloudLinux security backports); 0 = pristine build
 PHP_LIBDIR_NAME="${PHP_LIBDIR_NAME:-}"
 IONCUBE_LOADER="${REPO_DIR}/ioncube/ioncube_loader_lin_${PHP_SERIES}.so"
 
@@ -616,6 +617,57 @@ run_regression_tests() {
   log "all PHP ${PHP_SERIES} production regression suites passed"
 }
 
+# ── CloudLinux security patch series ─────────────────────────────────────────
+# Apply the security/bug backports imported from CloudLinux's public EA4 SRPM
+# (see patches/README.md + tools/import-cloudlinux-patches.py) onto the freshly
+# fetched source. patches/ is verbatim CloudLinux, in apply order; patches-local/
+# is our hand-maintained overlay that survives a refresh: `exclude` lists series
+# entries we skip (already-covered in our boogermann base, or deferred non-CVE
+# bugs — with reasons), and patches-local/*.patch are our own adaptations (e.g.
+# the CVE-2019-11048 fix rebased onto our unsigned-int base).
+#
+# Unlike 5.3, this tree ships configure + the re2c-generated files and needs no
+# toolchain, and no kept patch conflicts on a generated file — so the only reject
+# class we tolerate is test fixtures (never built into the runtime). Any other
+# reject aborts the build: a security patch must never silently half-apply.
+apply_patches() {
+  [ "$APPLY_PATCHES" = "1" ] || { log "APPLY_PATCHES=0 — building pristine (no security series)"; return; }
+  local series="${SRC_DIR}/patches/series"
+  [ -f "$series" ] || { warn "no patches/series in source — building without the security backports"; return; }
+
+  pushd "$SRC_DIR" >/dev/null
+    local excl="patches-local/exclude" applied=0 skipped=0
+    log "applying CloudLinux security patch series"
+    while read -r f rest; do
+      [ -z "$f" ] && continue
+      case "$f" in \#*) continue ;; esac
+      if [ -f "$excl" ] && grep -vE '^[[:space:]]*#' "$excl" | grep -qxF "$f"; then
+        skipped=$((skipped+1)); continue
+      fi
+      local pl=1; case "$rest" in *-p0*) pl=0 ;; *-p2*) pl=2 ;; esac
+      patch -p"$pl" --no-backup-if-mismatch -s -i "patches/$f" || true
+      applied=$((applied+1))
+    done < "$series"
+
+    if [ -d patches-local ]; then
+      for lp in patches-local/*.patch; do
+        [ -e "$lp" ] || continue
+        log "  local adaptation: $lp"
+        patch -p1 --no-backup-if-mismatch -s -i "$lp" || die "local patch failed to apply: $lp"
+      done
+    fi
+
+    local bad
+    bad="$(find . -name '*.rej' | grep -vE '/tests/' || true)"
+    if [ -n "$bad" ]; then
+      warn "unexpected patch rejects:"; printf '%s\n' "$bad" >&2
+      die "refusing to build with half-applied security patches (resolve via patches-local/)"
+    fi
+    find . -name '*.rej' -delete 2>/dev/null || true
+    log "security series applied (${applied} patches, ${skipped} excluded)"
+  popd >/dev/null
+}
+
 main() {
   need_root
   mkdir -p "$BUILD_ROOT" "$NGM_ROOT"
@@ -642,6 +694,7 @@ main() {
   ensure_configure_lib_alias "$CURL_PREFIX" 'libcurl.so.4*'
   ensure_configure_lib_alias "$MCRYPT_PREFIX" 'libmcrypt.so*'
   fetch_php_source
+  apply_patches
   build_php
   install_runtime_extensions
   verify

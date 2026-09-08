@@ -272,3 +272,8 @@ win32/php.dsw
 !Zend/zend_ini_parser.c
 !Zend/zend_ini_parser.h
 !main/php_config.h.in
+
+# NGM: our security patch series and hand-maintained overlay are intentionally
+# version-controlled, so exempt them from the generic *.patch ignore above.
+!patches/*.patch
+!patches-local/*.patch

@@ -1,0 +1,71 @@
+# patches-local/exclude — CloudLinux series entries we deliberately DO NOT apply.
+# One series filename per line (# comments allowed). Hand-maintained; the importer
+# never touches it. The build skips these when applying patches/series.
+
+# CVE-2019-11048 (main/rfc1867.c multipart body overflow) — rebased onto our
+# boogermann base as patches-local/CVE-2019-11048-rfc1867-size_t.patch, because
+# our tree carries 'unsigned int' (not the pristine 'int' these patches expect),
+# so the CloudLinux hunks don't apply. bug78875 only splits array_len (already a
+# separate, bounded 'unsigned int' here — safe), so it is not re-created.
+php-5.6.40-bug78875-CVE-2019-11048.patch
+php-5.6.40-bug78876-CVE-2019-11048.patch
+
+# ── Auto-verified already-covered by our boogermann base (batch) ──
+# Group A: the whole patch reverse-applies cleanly = already present identically.
+CVE-2019-11036.patch
+bug78793.patch
+php-5.2.17-CVE-2019-13224.patch
+php-5.6-bug79797-CVE-2020-7068.patch
+php-5.6.40-bug77973.patch
+php-5.6.40-bug78599.patch
+php-5.6.40-bug79037.patch
+php-5.6.40-bug79099.patch
+php-5.6.40-bug79221.patch
+php-5.6.40-bug79329.patch
+php-5.6.40-bug79465-CVE-2020-7067.patch
+# Group B: not a CVE and 100% of the fix's added lines are already in our tree;
+# the CloudLinux hunks reject only on surrounding-context drift.
+bug78863.patch
+bug78878.patch
+bug78910.patch
+hardened-81211.patch
+hardened-bug76448.patch
+hardened-bug76450.patch
+php-5.6.38-bug76488.patch
+php-5.6.40-bug75457.patch
+php-5.6.40-bug77396.patch
+php-5.6.40-bug77431.patch
+php-5.6.40-bug77540.patch
+php-5.6.40-bug77563.patch
+php-5.6.40-bug77586.patch
+php-5.6.40-bug77988.patch
+php-5.6.40-bug78069.patch
+php-5.6.40-bug78222.patch
+php-5.6.40-bug78256.patch
+php-5.6.40-bug79082.patch
+php-5.6.40-bug79282.patch
+
+# ── Careful-pile: verified already-fixed CVEs in our boogermann base ──
+# CVE-2020-7070  main/php_variables.c: `if (arg != PARSE_COOKIE)` guards present (x2).
+php-5.6.40-bug79699-CVE-2020-7070.patch
+# CVE-2021-21705 ext/filter/logical_filters.c: is_userinfo_valid() present and wired
+#   into php_filter_validate_url (our variant caches strlen).
+php-7.0-CVE-2021-21705.patch
+# CVE-2019-11035 ext/exif/exif.c: exif_iif_add_value already carries the size_t
+#   value_len parameter and the length>value_len bounds-check rework.
+php56-CVE-2019-11035.patch
+# CVE-2021-21704 ext/pdo_firebird: the *len==ULONG_MAX guard is present, written as
+#   (LONG_MAX * 2UL + 1UL).
+php56-CVE-2021-21704.patch
+
+# ── Careful-pile: non-CVE robustness bugs, DEFERRED (documented) ──
+# Not security CVEs; they conflict with our boogermann base and are low risk on a
+# legacy runtime. Revisit via a future refresh if wanted.
+# bug78333 ext/exif/exif.c: adds php_ifd_get_float/double IFD readers.
+php-5.6.40-bug78333.patch
+# bug77630 main/streams/plain_wrapper.c: EPERM handling on rename/link.
+php-5.6.40-bug77630.patch
+# bug74670 ext/standard/var_unserializer: GMP unserialize underflow — touches the
+#   re2c-GENERATED var_unserializer.c, which this 5.6 build ships pre-generated and
+#   cannot regenerate (no re2c toolchain), so it can't be cleanly applied here.
+php-5.6.38-bug74670.patch
