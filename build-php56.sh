@@ -40,12 +40,20 @@ PREFIX="${PREFIX:-${NGM_ROOT}/${PHP_SERIES}}"
 BUILD_ROOT="${BUILD_ROOT:-/usr/local/src/ngm-php56-build}"
 SRC_DIR="${BUILD_ROOT}/php-${PHP_RELEASE}"
 
-OPENSSL_VERSION="${OPENSSL_VERSION:-3.5.7}"
+OPENSSL_VERSION="${OPENSSL_VERSION:-3.5.8}"
 OPENSSL_PREFIX="${OPENSSL_PREFIX:-${NGM_ROOT}/openssl-3.5}"
 CURL_VERSION="${CURL_VERSION:-8.21.0}"
 CURL_PREFIX="${CURL_PREFIX:-${NGM_ROOT}/curl-gnutls}"
 MCRYPT_VERSION="${MCRYPT_VERSION:-2.5.8}"
 MCRYPT_PREFIX="${MCRYPT_PREFIX:-${NGM_ROOT}/libmcrypt}"
+
+# sha256 of the private build-dependency tarballs (non-empty enforces, empty warns).
+# OpenSSL tracks the latest 3.5.x LTS; tools/check-deps.py reports when a newer one
+# ships. php53/php56/php7 share the /opt/ngm/php/openssl-3.5 prefix, so they MUST
+# pin the SAME OpenSSL or a build for one rebuilds the shared prefix under the others.
+OPENSSL_SHA256="${OPENSSL_SHA256:-a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2}"  # openssl-3.5.8.tar.gz
+CURL_SHA256="${CURL_SHA256:-aa1b66a70eace83dc624508745646c08ae561de512ab403adffb93ac87fc72e6}"        # curl-8.21.0.tar.xz
+MCRYPT_SHA256="${MCRYPT_SHA256:-e4eb6c074bbab168ac47b947c195ff8cef9d51a211cdd18ca9c9ef34d27a373e}"     # libmcrypt-2.5.8.tar.gz
 
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 2)}"
 FORCE="${FORCE:-0}"
@@ -68,6 +76,20 @@ fi
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARN:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
+
+# check_sha256 <file> <expected> <label>: enforce when pinned (mismatch aborts —
+# a tampered/wrong crypto tarball must never reach the build), else warn with the
+# computed digest so a new version can be pinned from a trusted run.
+check_sha256() {
+  local file="$1" want="$2" label="$3" got
+  got="$(sha256sum "$file" | awk '{print $1}')"
+  if [ -n "$want" ]; then
+    [ "$got" = "$want" ] || die "${label} sha256 mismatch: got ${got}, expected ${want}."
+    log "verified ${label} sha256 ${got}"
+  else
+    warn "no pinned sha256 for ${label} — got ${got} (pin it once trusted)."
+  fi
+}
 
 on_error() {
   local rc=$?
@@ -188,6 +210,7 @@ build_openssl() {
   # Keep the matching source tarball even if OpenSSL is already installed;
   # provisioning openssl.cnf uses the source release's canonical config.
   fetch "https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz" "$tarball"
+  check_sha256 "$tarball" "$OPENSSL_SHA256" "openssl-${OPENSSL_VERSION}.tar.gz"
 
   libdir="$(find_libdir "$OPENSSL_PREFIX" 'libssl.so.3' || true)"
   if [ -n "$libdir" ] && [ -x "${OPENSSL_PREFIX}/bin/openssl" ] && [ "$FORCE_DEPS" != "1" ]; then
@@ -304,6 +327,7 @@ build_curl() {
 
   ca_bundle="$(find_ca_bundle)" || die "could not locate the system CA bundle."
   fetch "https://curl.se/download/curl-${CURL_VERSION}.tar.xz" "${BUILD_ROOT}/curl-${CURL_VERSION}.tar.xz"
+  check_sha256 "${BUILD_ROOT}/curl-${CURL_VERSION}.tar.xz" "$CURL_SHA256" "curl-${CURL_VERSION}.tar.xz"
   rm -rf "${BUILD_ROOT}/curl-${CURL_VERSION}"
   tar -xJf "${BUILD_ROOT}/curl-${CURL_VERSION}.tar.xz" -C "$BUILD_ROOT"
 
@@ -336,6 +360,7 @@ build_libmcrypt() {
   fetch \
     "https://sourceforge.net/projects/mcrypt/files/Libmcrypt/${MCRYPT_VERSION}/libmcrypt-${MCRYPT_VERSION}.tar.gz/download" \
     "${BUILD_ROOT}/libmcrypt-${MCRYPT_VERSION}.tar.gz"
+  check_sha256 "${BUILD_ROOT}/libmcrypt-${MCRYPT_VERSION}.tar.gz" "$MCRYPT_SHA256" "libmcrypt-${MCRYPT_VERSION}.tar.gz"
   rm -rf "${BUILD_ROOT}/libmcrypt-${MCRYPT_VERSION}"
   tar -xzf "${BUILD_ROOT}/libmcrypt-${MCRYPT_VERSION}.tar.gz" -C "$BUILD_ROOT"
 
