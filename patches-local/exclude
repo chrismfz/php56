@@ -54,6 +54,9 @@ php-7.0-CVE-2021-21705.patch
 # CVE-2019-11035 ext/exif/exif.c: exif_iif_add_value already carries the size_t
 #   value_len parameter and the length>value_len bounds-check rework.
 php56-CVE-2019-11035.patch
+# CVE-2019-9641 ext/exif/exif.c: exif_process_IFD_in_TIFF already carries all three
+#   overflow-safe FileSize subtractions and the (size_t)num_entries widening.
+php-5.6-CVE-2019-9641.patch
 # CVE-2021-21704 ext/pdo_firebird: the *len==ULONG_MAX guard is present, written as
 #   (LONG_MAX * 2UL + 1UL).
 php56-CVE-2021-21704.patch
