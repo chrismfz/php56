@@ -40,11 +40,18 @@ build-packaging patches we don't use.
     already changed the pristine `int` to `unsigned int` — raising the overflow to
     4GB but not closing it; this is the full `size_t` fix).
 
-Current base: **`ea-php56-php-5.6.40-25.el8.cloudlinux.16`**. Of the 177 imported
-patches, 138 apply cleanly and 39 are excluded via `patches-local/exclude` — most
+Current base: **`ea-php56-php-5.6.40-25.el8.cloudlinux.18`** (refreshed 2026-10-23,
+adds PHP2SHELL CVE-2026-109618/109619). Of the 183 imported patches, 143 apply
+cleanly and 40 are excluded via `patches-local/exclude` — most
 already-covered by our base, plus the two CVE-2019-11048 patches (rebased as the
 local patch above) and 3 deferred non-CVE robustness bugs. **Every CVE in the
 series is covered.**
+
+**PHP2SHELL (CVE-2026-109618 / CVE-2026-109619)** is in the series since the
+2026-10-23 refresh. It is a deliberate EOL trade: exceeding `memory_limit` (or an
+allocator overflow) now ends the worker with `_exit(1)` instead of a catchable
+fatal error, so shutdown functions don't run and the client sees a 502.
+`session.upload_progress` is also disabled, whatever the ini says.
 
 Unlike the 5.3 tree, 5.6 ships `configure` and the re2c-generated files, so the
 build needs no generator toolchain and no `p_option` foundation patch (5.6 has
